@@ -1,0 +1,587 @@
+{% extends "base.html" %}
+
+{% block title %}Practice Interview - AI Interviewer{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-800">Practice Interview</h1>
+        <a href="{{ url_for('prep') }}" class="text-indigo-600 hover:text-indigo-800">
+            <i class="fas fa-arrow-left mr-1"></i> Back to Prep
+        </a>
+    </div>
+    
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-6 p-4 rounded-lg {% if category == 'error' %}bg-red-100 text-red-700{% elif category == 'success' %}bg-green-100 text-green-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main practice area -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Question <span id="currentQuestionNumber">1</span>/<span id="totalQuestions">{{ questions|length }}</span></h3>
+                    <span id="questionType" class="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm">Technical</span>
+                </div>
+                <p id="questionText" class="text-lg mb-4">Loading question...</p>
+                
+                <!-- Coding question editor (hidden by default) -->
+                <div id="codingSection" class="hidden mb-4">
+                    <div class="border border-gray-300 rounded-md overflow-hidden">
+                        <div class="bg-gray-100 px-4 py-2 flex justify-between items-center">
+                            <span class="font-medium text-gray-700">Code Editor</span>
+                            <select id="languageSelector" class="text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="python">Python</option>
+                                <option value="javascript">JavaScript</option>
+                                <option value="java">Java</option>
+                                <option value="csharp">C#</option>
+                                <option value="cpp">C++</option>
+                                <option value="sql">SQL</option>
+                            </select>
+                        </div>
+                        <textarea id="codeEditor" class="w-full h-64 p-4 font-mono text-sm" placeholder="Write your code here..."></textarea>
+                    </div>
+                    <div class="flex justify-end mt-2">
+                        <button id="runCodeBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                            <i class="fas fa-play mr-2"></i> Run Code
+                        </button>
+                    </div>
+                    <div id="codeOutput" class="mt-4 p-4 bg-gray-800 text-white font-mono text-sm rounded-md hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-medium">Output:</span>
+                            <button id="clearOutputBtn" class="text-gray-400 hover:text-white text-xs">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </div>
+                        <div id="outputContent" class="whitespace-pre-wrap"></div>
+                    </div>
+                </div>
+                
+                <!-- Text answer section -->
+                <div id="textAnswerSection">
+                    <textarea id="answerText" class="w-full h-32 p-4 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 mb-4" placeholder="Type your answer here..."></textarea>
+                </div>
+                
+                <div class="flex justify-between">
+                    <button id="prevQuestionBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded">
+                        <i class="fas fa-arrow-left mr-2"></i> Previous
+                    </button>
+                    <button id="checkAnswerBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded">
+                        Check Answer
+                    </button>
+                    <button id="nextQuestionBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded">
+                        Next <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="feedbackContainer" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+                <h3 class="text-lg font-semibold mb-4">AI Feedback</h3>
+                <div id="feedbackContent" class="text-gray-700"></div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="lg:col-span-1">
+            <!-- Progress -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4">Your Progress</h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium text-gray-700">Completed</span>
+                            <span class="text-sm font-medium text-gray-700" id="progressText">0/{{ questions|length }}</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="bg-indigo-600 h-2.5 rounded-full" id="progressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium text-gray-700">Score</span>
+                            <span class="text-sm font-medium text-gray-700" id="scoreText">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="bg-green-600 h-2.5 rounded-full" id="scoreBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Questions list -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4">Questions</h3>
+                <ul id="questionsList" class="space-y-2"></ul>
+            </div>
+            
+            <!-- Finish button -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <button id="finishPracticeBtn" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded">
+                    <i class="fas fa-check-circle mr-2"></i> Finish Practice
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Variables
+    let currentQuestionIndex = 0;
+    let practiceQuestions = [];
+    let userAnswers = [];
+    let questionScores = [];
+    
+    // DOM elements
+    const currentQuestionNumber = document.getElementById('currentQuestionNumber');
+    const totalQuestions = document.getElementById('totalQuestions');
+    const questionType = document.getElementById('questionType');
+    const questionText = document.getElementById('questionText');
+    const codingSection = document.getElementById('codingSection');
+    const textAnswerSection = document.getElementById('textAnswerSection');
+    const answerText = document.getElementById('answerText');
+    const codeEditor = document.getElementById('codeEditor');
+    const languageSelector = document.getElementById('languageSelector');
+    const runCodeBtn = document.getElementById('runCodeBtn');
+    const codeOutput = document.getElementById('codeOutput');
+    const outputContent = document.getElementById('outputContent');
+    const clearOutputBtn = document.getElementById('clearOutputBtn');
+    const prevQuestionBtn = document.getElementById('prevQuestionBtn');
+    const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+    const checkAnswerBtn = document.getElementById('checkAnswerBtn');
+    const feedbackContainer = document.getElementById('feedbackContainer');
+    const feedbackContent = document.getElementById('feedbackContent');
+    const questionsList = document.getElementById('questionsList');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const scoreBar = document.getElementById('scoreBar');
+    const scoreText = document.getElementById('scoreText');
+    const finishPracticeBtn = document.getElementById('finishPracticeBtn');
+    
+    // Initialize practice
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load questions from session storage
+        const storedQuestions = sessionStorage.getItem('practiceQuestions');
+        
+        if (storedQuestions) {
+            practiceQuestions = JSON.parse(storedQuestions);
+            
+            // Initialize arrays for user answers and scores
+            userAnswers = new Array(practiceQuestions.length).fill('');
+            questionScores = new Array(practiceQuestions.length).fill(0);
+            
+            // Initialize the practice
+            initializePractice();
+        } else {
+            // If no questions found, redirect to prep page
+            showNotification('No practice questions found. Please set up your practice first.', 'error');
+            setTimeout(() => {
+                window.location.href = '{{ url_for("prep") }}';
+            }, 2000);
+        }
+    });
+    
+    // Initialize practice
+    function initializePractice() {
+        // Display first question
+        displayQuestion(0);
+        
+        // Populate questions list
+        populateQuestionsList();
+        
+        // Set up button event listeners
+        prevQuestionBtn.addEventListener('click', goToPreviousQuestion);
+        nextQuestionBtn.addEventListener('click', goToNextQuestion);
+        checkAnswerBtn.addEventListener('click', checkAnswer);
+        runCodeBtn.addEventListener('click', runCode);
+        clearOutputBtn.addEventListener('click', clearOutput);
+        finishPracticeBtn.addEventListener('click', finishPractice);
+        
+        // Disable previous button on first question
+        prevQuestionBtn.disabled = true;
+    }
+    
+    // Display question
+    function displayQuestion(index) {
+        if (!practiceQuestions || practiceQuestions.length === 0) {
+            questionText.textContent = 'No questions available. Please set up your practice again.';
+            return;
+        }
+        
+        if (index < 0 || index >= practiceQuestions.length) {
+            return;
+        }
+        
+        const question = practiceQuestions[index];
+        
+        // Update question number
+        currentQuestionNumber.textContent = index + 1;
+        totalQuestions.textContent = practiceQuestions.length;
+        
+        // Update question type
+        questionType.textContent = question.type.charAt(0).toUpperCase() + question.type.slice(1);
+        questionType.className = `px-3 py-1 rounded-full text-sm ${getTypeColor(question.type)}`;
+        
+        // Update question text
+        questionText.textContent = question.question;
+        
+        // Show/hide coding section based on question type
+        if (question.type === 'coding') {
+            codingSection.classList.remove('hidden');
+            textAnswerSection.classList.add('hidden');
+            
+            // Set language if specified
+            if (question.language) {
+                languageSelector.value = question.language.toLowerCase();
+            }
+            
+            // Load previous answer if exists
+            codeEditor.value = userAnswers[index] || '';
+        } else {
+            codingSection.classList.add('hidden');
+            textAnswerSection.classList.remove('hidden');
+            
+            // Load previous answer if exists
+            answerText.value = userAnswers[index] || '';
+        }
+        
+        // Update navigation buttons
+        prevQuestionBtn.disabled = index === 0;
+        nextQuestionBtn.disabled = index === practiceQuestions.length - 1;
+        
+        // Hide feedback
+        feedbackContainer.classList.add('hidden');
+        
+        // Update active question in list
+        updateActiveQuestionInList();
+    }
+    
+    // Populate questions list
+    function populateQuestionsList() {
+        questionsList.innerHTML = '';
+        
+        practiceQuestions.forEach((question, index) => {
+            const li = document.createElement('li');
+            li.className = index === currentQuestionIndex ? 'p-2 bg-indigo-100 rounded cursor-pointer' : 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+            
+            // Add status indicator
+            let statusClass = 'bg-gray-200';
+            if (questionScores[index] > 0) {
+                statusClass = 'bg-green-500';
+            } else if (userAnswers[index]) {
+                statusClass = 'bg-yellow-500';
+            }
+            
+            li.innerHTML = `
+                <div class="flex items-center">
+                    <span class="w-3 h-3 rounded-full ${statusClass} mr-2"></span>
+                    <span>Q${index + 1}: ${question.type.charAt(0).toUpperCase() + question.type.slice(1)}</span>
+                </div>
+            `;
+            
+            li.addEventListener('click', () => {
+                currentQuestionIndex = index;
+                displayQuestion(index);
+            });
+            
+            questionsList.appendChild(li);
+        });
+    }
+    
+    // Update active question in list
+    function updateActiveQuestionInList() {
+        document.querySelectorAll('#questionsList li').forEach((item, i) => {
+            item.className = i === currentQuestionIndex ? 'p-2 bg-indigo-100 rounded cursor-pointer' : 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+        });
+    }
+    
+    // Navigation functions
+    function goToPreviousQuestion() {
+        if (currentQuestionIndex > 0) {
+            // Save current answer
+            saveCurrentAnswer();
+            
+            // Go to previous question
+            currentQuestionIndex--;
+            displayQuestion(currentQuestionIndex);
+        }
+    }
+    
+    function goToNextQuestion() {
+        if (currentQuestionIndex < practiceQuestions.length - 1) {
+            // Save current answer
+            saveCurrentAnswer();
+            
+            // Go to next question
+            currentQuestionIndex++;
+            displayQuestion(currentQuestionIndex);
+        }
+    }
+    
+    // Save current answer
+    function saveCurrentAnswer() {
+        const question = practiceQuestions[currentQuestionIndex];
+        
+        if (question.type === 'coding') {
+            userAnswers[currentQuestionIndex] = codeEditor.value;
+        } else {
+            userAnswers[currentQuestionIndex] = answerText.value;
+        }
+        
+        // Update progress
+        updateProgress();
+    }
+    
+    // Check answer
+    async function checkAnswer() {
+        // Save current answer
+        saveCurrentAnswer();
+        
+        const question = practiceQuestions[currentQuestionIndex];
+        const answer = userAnswers[currentQuestionIndex];
+        
+        if (!answer.trim()) {
+            showNotification('Please provide an answer before checking.', 'error');
+            return;
+        }
+        
+        // Show loading state
+        checkAnswerBtn.disabled = true;
+        checkAnswerBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Checking...';
+        
+        try {
+            // Send answer to server for evaluation
+            const response = await fetch('/api/check-answer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    question: question,
+                    answer: answer
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to check answer');
+            }
+            
+            const data = await response.json();
+            
+            // Display feedback
+            displayFeedback(data.feedback);
+            
+            // Update score
+            questionScores[currentQuestionIndex] = data.score;
+            
+            // Update progress and score
+            updateProgress();
+            
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Error checking answer. Please try again.', 'error');
+        } finally {
+            // Reset button
+            checkAnswerBtn.disabled = false;
+            checkAnswerBtn.innerHTML = 'Check Answer';
+        }
+    }
+    
+    // Display feedback
+    function displayFeedback(feedback) {
+        feedbackContainer.classList.remove('hidden');
+        
+        // Format feedback
+        let feedbackHTML = '';
+        
+        if (typeof feedback === 'string') {
+            feedbackHTML = `<p>${feedback}</p>`;
+        } else {
+            // Structured feedback
+            if (feedback.correctness) {
+                const correctnessClass = feedback.correctness >= 80 ? 'text-green-600' : feedback.correctness >= 50 ? 'text-yellow-600' : 'text-red-600';
+                feedbackHTML += `
+                    <div class="mb-4">
+                        <h4 class="font-semibold mb-1">Correctness</h4>
+                        <div class="flex items-center">
+                            <div class="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden mr-3">
+                                <div class="absolute top-0 left-0 h-full ${correctnessClass.replace('text-', 'bg-')}" style="width: ${feedback.correctness}%"></div>
+                            </div>
+                            <span class="font-medium ${correctnessClass}">${feedback.correctness}%</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (feedback.explanation) {
+                feedbackHTML += `
+                    <div class="mb-4">
+                        <h4 class="font-semibold mb-1">Explanation</h4>
+                        <p>${feedback.explanation}</p>
+                    </div>
+                `;
+            }
+            
+            if (feedback.suggestions) {
+                feedbackHTML += `
+                    <div>
+                        <h4 class="font-semibold mb-1">Suggestions for Improvement</h4>
+                        <ul class="list-disc pl-5 space-y-1">
+                            ${Array.isArray(feedback.suggestions) 
+                                ? feedback.suggestions.map(s => `<li>${s}</li>`).join('') 
+                                : `<li>${feedback.suggestions}</li>`}
+                        </ul>
+                    </div>
+                `;
+            }
+        }
+        
+        feedbackContent.innerHTML = feedbackHTML;
+    }
+    
+    // Run code
+    async function runCode() {
+        const code = codeEditor.value;
+        const language = languageSelector.value;
+        
+        if (!code.trim()) {
+            showNotification('Please write some code before running.', 'error');
+            return;
+        }
+        
+        // Show loading state
+        runCodeBtn.disabled = true;
+        runCodeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Running...';
+        
+        // Show output section
+        codeOutput.classList.remove('hidden');
+        outputContent.innerHTML = 'Running code...';
+        
+        try {
+            // Send code to server for execution
+            const response = await fetch('/api/run-code', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    code: code,
+                    language: language
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to run code');
+            }
+            
+            const data = await response.json();
+            
+            // Display output
+            if (data.error) {
+                outputContent.innerHTML = `<span class="text-red-500">${data.error}</span>`;
+            } else {
+                outputContent.innerHTML = data.output || 'No output';
+            }
+            
+        } catch (error) {
+            console.error('Error:', error);
+            outputContent.innerHTML = `<span class="text-red-500">Error: ${error.message}</span>`;
+        } finally {
+            // Reset button
+            runCodeBtn.disabled = false;
+            runCodeBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Run Code';
+        }
+    }
+    
+    // Clear output
+    function clearOutput() {
+        outputContent.innerHTML = '';
+    }
+    
+    // Update progress
+    function updateProgress() {
+        // Count answered questions
+        const answeredCount = userAnswers.filter(a => a.trim()).length;
+        
+        // Update progress bar and text
+        const progressPercent = (answeredCount / practiceQuestions.length) * 100;
+        progressBar.style.width = `${progressPercent}%`;
+        progressText.textContent = `${answeredCount}/${practiceQuestions.length}`;
+        
+        // Calculate score
+        const totalScore = questionScores.reduce((sum, score) => sum + score, 0);
+        const maxPossibleScore = practiceQuestions.length * 100;
+        const scorePercent = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+        
+        // Update score bar and text
+        scoreBar.style.width = `${scorePercent}%`;
+        scoreText.textContent = `${Math.round(scorePercent)}%`;
+        
+        // Update questions list to show status
+        populateQuestionsList();
+    }
+    
+    // Finish practice
+    function finishPractice() {
+        // Save current answer
+        saveCurrentAnswer();
+        
+        // Calculate final score
+        const totalScore = questionScores.reduce((sum, score) => sum + score, 0);
+        const maxPossibleScore = practiceQuestions.length * 100;
+        const scorePercent = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+        
+        // Show confirmation dialog
+        if (confirm(`Are you sure you want to finish this practice session? Your final score is ${Math.round(scorePercent)}%.`)) {
+            // Clear session storage
+            sessionStorage.removeItem('practiceQuestions');
+            
+            // Redirect to dashboard
+            window.location.href = '{{ url_for("dashboard") }}';
+        }
+    }
+    
+    // Get color class for question type
+    function getTypeColor(type) {
+        switch (type.toLowerCase()) {
+            case 'technical':
+                return 'bg-blue-100 text-blue-800';
+            case 'behavioral':
+                return 'bg-green-100 text-green-800';
+            case 'situational':
+                return 'bg-purple-100 text-purple-800';
+            case 'coding':
+                return 'bg-yellow-100 text-yellow-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
+    }
+    
+    // Show notification
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg ${type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-indigo-500'} text-white max-w-md`;
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas ${type === 'error' ? 'fa-exclamation-circle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} mr-3"></i>
+                <p>${message}</p>
+            </div>
+        `;
+        document.body.appendChild(notification);
+        
+        // Remove notification after 5 seconds
+        setTimeout(() => {
+            notification.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 500);
+        }, 5000);
+    }
+</script>
+{% endblock %}

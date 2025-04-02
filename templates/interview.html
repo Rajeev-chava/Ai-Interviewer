@@ -1,0 +1,631 @@
+{% extends "base.html" %}
+
+{% block title %}Interview Session - AI Interviewer{% endblock %}
+
+{% block head %}
+<!-- MediaRecorder polyfill for older browsers -->
+<script src="https://cdn.jsdelivr.net/npm/webrtc-adapter@8.1.1/out/adapter.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Interview Session</h1>
+        <a href="{{ url_for('dashboard') }}" class="text-indigo-600 hover:text-indigo-800">
+            <i class="fas fa-times"></i> Exit Interview
+        </a>
+    </div>
+
+    <div class="bg-blue-50 p-4 rounded-lg mb-6">
+        <h2 class="text-xl font-semibold">{{ interview.job_title }}</h2>
+        <p class="text-gray-600">{{ interview.experience_level }} Level • {{ interview.experience_years }} Years Experience</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main interview area -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Question <span id="currentQuestionNumber">1</span>/<span id="totalQuestions">{{ questions|length }}</span></h3>
+                    <span id="questionType" class="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm">Technical</span>
+                </div>
+                <p id="questionText" class="text-lg mb-4">Loading question...</p>
+                <div class="flex justify-between">
+                    <button id="prevQuestionBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded">
+                        <i class="fas fa-arrow-left mr-2"></i> Previous
+                    </button>
+                    <span id="timer" class="text-gray-600">00:00</span>
+                    <button id="nextQuestionBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded">
+                        Next <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4">Record Your Answer</h3>
+                <div id="recordingStatus" class="text-center p-3 bg-gray-100 rounded-lg mb-4">
+                    <p class="text-gray-700">Click "Start Recording" to begin your answer</p>
+                </div>
+                <div class="flex justify-center space-x-4">
+                    <button id="startRecordingBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded">
+                        <i class="fas fa-microphone mr-2"></i> Start Recording
+                    </button>
+                    <button id="stopRecordingBtn" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded hidden">
+                        <i class="fas fa-stop-circle mr-2"></i> Stop Recording
+                    </button>
+                </div>
+            </div>
+
+            <div id="transcriptionContainer" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+                <h3 class="text-lg font-semibold mb-4">Your Answer</h3>
+                <p id="transcriptionText" class="text-gray-700"></p>
+            </div>
+
+            <div id="analysisContainer" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+                <h3 class="text-lg font-semibold mb-4">Analysis</h3>
+                <div id="analysisContent" class="text-gray-700"></div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="lg:col-span-1">
+            <!-- Video feed -->
+            <div id="videoContainer" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4">Video Feed</h3>
+                <div class="relative bg-gray-200 rounded-lg aspect-video flex items-center justify-center">
+                    <video id="videoElement" class="w-full h-full rounded-lg" autoplay muted></video>
+                    <div id="videoPlaceholder" class="absolute inset-0 flex items-center justify-center">
+                        <i class="fas fa-video text-gray-400 text-4xl"></i>
+                    </div>
+                </div>
+                <p id="videoStatus" class="text-center text-gray-600 mt-2">Video disabled</p>
+            </div>
+
+            <!-- Questions list -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4">Questions</h3>
+                <ul id="questionsList" class="space-y-2"></ul>
+            </div>
+
+            <!-- Finish button -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <button id="finishInterviewBtn" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded">
+                    <i class="fas fa-check-circle mr-2"></i> Finish Interview
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Variables
+    let currentQuestionIndex = 0;
+    let interviewQuestions = [];
+    let mediaRecorder;
+    let audioChunks = [];
+    let recordingStartTime;
+    let timerInterval;
+    let stream;
+    let enableVideo = false;
+
+    // DOM elements
+    const currentQuestionNumber = document.getElementById('currentQuestionNumber');
+    const totalQuestions = document.getElementById('totalQuestions');
+    const questionType = document.getElementById('questionType');
+    const questionText = document.getElementById('questionText');
+    const timer = document.getElementById('timer');
+    const prevQuestionBtn = document.getElementById('prevQuestionBtn');
+    const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+    const startRecordingBtn = document.getElementById('startRecordingBtn');
+    const stopRecordingBtn = document.getElementById('stopRecordingBtn');
+    const recordingStatus = document.getElementById('recordingStatus');
+    const transcriptionContainer = document.getElementById('transcriptionContainer');
+    const transcriptionText = document.getElementById('transcriptionText');
+    const analysisContainer = document.getElementById('analysisContainer');
+    const analysisContent = document.getElementById('analysisContent');
+    const questionsList = document.getElementById('questionsList');
+    const videoElement = document.getElementById('videoElement');
+    const videoPlaceholder = document.getElementById('videoPlaceholder');
+    const videoStatus = document.getElementById('videoStatus');
+    const videoContainer = document.getElementById('videoContainer');
+    const finishInterviewBtn = document.getElementById('finishInterviewBtn');
+
+    // Initialize interview
+    function initializeInterview() {
+        // Display first question
+        displayQuestion(0);
+
+        // Populate questions list
+        populateQuestionsList();
+
+        // Set up button event listeners
+        prevQuestionBtn.addEventListener('click', goToPreviousQuestion);
+        nextQuestionBtn.addEventListener('click', goToNextQuestion);
+        startRecordingBtn.addEventListener('click', startRecording);
+        stopRecordingBtn.addEventListener('click', stopRecording);
+        finishInterviewBtn.addEventListener('click', finishInterview);
+
+        // Disable previous button on first question
+        prevQuestionBtn.disabled = true;
+    }
+
+    // Display question
+    function displayQuestion(index) {
+        console.log('Displaying question at index:', index);
+        console.log('interviewQuestions:', interviewQuestions);
+
+        if (!interviewQuestions || interviewQuestions.length === 0) {
+            console.error('No questions available to display');
+            questionText.textContent = 'No questions available. Please set up the interview again.';
+            return;
+        }
+
+        if (index < 0 || index >= interviewQuestions.length) {
+            console.error('Question index out of bounds:', index);
+            return;
+        }
+
+        const question = interviewQuestions[index];
+        console.log('Current question:', question);
+
+        // Update question number
+        currentQuestionNumber.textContent = index + 1;
+        totalQuestions.textContent = interviewQuestions.length;
+
+        // Update question type
+        questionType.textContent = question.type.charAt(0).toUpperCase() + question.type.slice(1);
+
+        // Update question text
+        questionText.textContent = question.question;
+
+        // Update navigation buttons
+        prevQuestionBtn.disabled = index === 0;
+        nextQuestionBtn.disabled = index === interviewQuestions.length - 1;
+
+        // Hide transcription and analysis for new question
+        transcriptionContainer.classList.add('hidden');
+        analysisContainer.classList.add('hidden');
+    }
+
+    // Populate questions list
+    function populateQuestionsList() {
+        questionsList.innerHTML = '';
+        interviewQuestions.forEach((question, index) => {
+            const li = document.createElement('li');
+            li.className = index === currentQuestionIndex ? 'p-2 bg-indigo-100 rounded cursor-pointer' : 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+            li.textContent = `Q${index + 1}: ${question.question.substring(0, 30)}${question.question.length > 30 ? '...' : ''}`;
+            li.addEventListener('click', () => {
+                currentQuestionIndex = index;
+                displayQuestion(index);
+                // Update active question in list
+                document.querySelectorAll('#questionsList li').forEach((item, i) => {
+                    item.className = i === index ? 'p-2 bg-indigo-100 rounded cursor-pointer' : 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+                });
+            });
+            questionsList.appendChild(li);
+        });
+    }
+
+    // Navigation functions
+    function goToPreviousQuestion() {
+        if (currentQuestionIndex > 0) {
+            currentQuestionIndex--;
+            displayQuestion(currentQuestionIndex);
+            // Update active question in list
+            document.querySelectorAll('#questionsList li').forEach((item, i) => {
+                item.className = i === currentQuestionIndex ? 'p-2 bg-indigo-100 rounded cursor-pointer' : 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+            });
+        }
+    }
+
+    function goToNextQuestion() {
+        if (currentQuestionIndex < interviewQuestions.length - 1) {
+            currentQuestionIndex++;
+            displayQuestion(currentQuestionIndex);
+            // Update active question in list
+            document.querySelectorAll('#questionsList li').forEach((item, i) => {
+                item.className = i === currentQuestionIndex ? 'p-2 bg-indigo-100 rounded cursor-pointer' : 'p-2 hover:bg-gray-100 rounded cursor-pointer';
+            });
+        }
+    }
+
+    // Timer functions
+    function startTimer() {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(updateTimer, 1000);
+    }
+
+    function updateTimer() {
+        const elapsedSeconds = Math.floor((Date.now() - recordingStartTime) / 1000);
+        const minutes = Math.floor(elapsedSeconds / 60).toString().padStart(2, '0');
+        const seconds = (elapsedSeconds % 60).toString().padStart(2, '0');
+        timer.textContent = `${minutes}:${seconds}`;
+    }
+
+    // Recording functions
+    async function startRecording() {
+        try {
+            // Get audio stream
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            // Set up data handler
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+
+            // Start recording
+            mediaRecorder.start();
+            console.log('Recording started');
+
+            // Update UI
+            startRecordingBtn.classList.add('hidden');
+            stopRecordingBtn.classList.remove('hidden');
+            recordingStatus.innerHTML = '<p class="text-red-600"><i class="fas fa-circle recording-pulse mr-2"></i> Recording...</p>';
+            recordingStatus.className = 'text-center p-3 bg-red-50 rounded-lg';
+
+            // Start timer
+            recordingStartTime = Date.now();
+            startTimer();
+
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            showNotification('Could not start recording. Please check your microphone permissions.', 'error');
+        }
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+
+            // Set up the onstop handler
+            mediaRecorder.onstop = async () => {
+                // Create audio blob
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
+                // Create form data for sending to server
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                formData.append('question_text', interviewQuestions[currentQuestionIndex].question);
+                formData.append('question_type', interviewQuestions[currentQuestionIndex].type);
+
+                // Show loading state
+                transcriptionContainer.classList.remove('hidden');
+                transcriptionText.innerHTML = '<div class="flex justify-center"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-indigo-500 border-solid"></div></div>';
+
+                try {
+                    // Send audio to server for transcription
+                    const response = await fetch('/api/transcribe', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Transcription failed');
+                    }
+
+                    const data = await response.json();
+
+                    if (!data.transcript) {
+                        throw new Error('No transcript returned from server');
+                    }
+
+                    // Display transcription
+                    transcriptionText.textContent = data.transcript;
+
+                    // Analyze response
+                    analyzeResponse(data.transcript);
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    transcriptionText.textContent = 'Error transcribing audio. Please try again.';
+                    showNotification('Error transcribing audio. Please try again.', 'error');
+                }
+
+                // Reset UI
+                stopRecordingBtn.classList.add('hidden');
+                startRecordingBtn.classList.remove('hidden');
+                recordingStatus.innerHTML = '<p class="text-green-600"><i class="fas fa-check-circle mr-2"></i> Recording complete</p>';
+                recordingStatus.className = 'text-center p-3 bg-green-50 rounded-lg';
+            };
+
+            // Stop timer
+            clearInterval(timerInterval);
+
+            // Release microphone
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        } else {
+            showNotification('No active recording found', 'warning');
+        }
+    }
+
+    // Analyze response
+    async function analyzeResponse(transcript) {
+        try {
+            // Show loading state
+            analysisContainer.classList.remove('hidden');
+            analysisContent.innerHTML = '<div class="flex justify-center"><div class="animate-spin rounded-full h-6 w-6 border-t-2 border-indigo-500 border-solid"></div></div>';
+
+            console.log('Sending transcript for analysis:', transcript);
+
+            // Send transcript for analysis
+            const response = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    question: interviewQuestions[currentQuestionIndex].question,
+                    response: transcript,
+                    question_type: interviewQuestions[currentQuestionIndex].type
+                }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Server error:', errorText);
+                throw new Error(`Failed to analyze response: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('Analysis response:', data);
+
+            // Format and display analysis
+            let analysisHtml = '';
+
+            if (!data.analysis) {
+                throw new Error('No analysis data returned from server');
+            }
+
+            if (data.analysis.text) {
+                // If analysis is just text
+                analysisHtml = `<div class="p-4 bg-gray-50 rounded">${data.analysis.text}</div>`;
+            } else if (typeof data.analysis === 'string') {
+                // If analysis is a plain string
+                analysisHtml = `<div class="p-4 bg-gray-50 rounded">${data.analysis}</div>`;
+            } else {
+                // If analysis is structured
+                analysisHtml = '';
+
+                // Define the order of sections
+                const sectionOrder = ['contentRelevance', 'clarityAndStructure', 'technicalAccuracy', 'areasOfImprovement'];
+
+                // Create a container for all sections
+                analysisHtml = `<div class="space-y-4 mb-6">`;
+
+                // Process sections in order
+                for (const key of sectionOrder) {
+                    if (data.analysis[key] && key !== 'score' && key !== 'error') {
+                        // Format section title
+                        let sectionTitle = '';
+
+                        if (key === 'contentRelevance') {
+                            sectionTitle = 'Content Relevance';
+                        } else if (key === 'clarityAndStructure') {
+                            sectionTitle = 'Clarity and Structure';
+                        } else if (key === 'technicalAccuracy') {
+                            sectionTitle = 'Technical Accuracy';
+                        } else if (key === 'areasOfImprovement') {
+                            sectionTitle = 'Areas of Improvement';
+                        } else {
+                            // Fallback formatting for any other keys
+                            sectionTitle = key
+                                .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+                                .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+                        }
+
+                        // Format the value
+                        const value = data.analysis[key];
+                        let formattedValue;
+
+                        if (typeof value === 'string') {
+                            // Clean up any JSON formatting that might be in the string
+                            formattedValue = value
+                                .replace(/\\n/g, '<br>') // Handle escaped newlines
+                                .replace(/\n/g, '<br>') // Handle regular newlines
+                                .replace(/\\"/g, '"') // Handle escaped quotes
+                                .replace(/^"|"$/g, ''); // Remove quotes at beginning/end
+                        } else {
+                            formattedValue = JSON.stringify(value);
+                        }
+
+                        // Add section to HTML with a distinct style for each section
+                        let sectionClass = '';
+                        if (key === 'contentRelevance') {
+                            sectionClass = 'border-l-4 border-blue-500';
+                        } else if (key === 'clarityAndStructure') {
+                            sectionClass = 'border-l-4 border-green-500';
+                        } else if (key === 'technicalAccuracy') {
+                            sectionClass = 'border-l-4 border-purple-500';
+                        } else if (key === 'areasOfImprovement') {
+                            sectionClass = 'border-l-4 border-yellow-500';
+                        }
+
+                        analysisHtml += `
+                            <div class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm ${sectionClass}">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-2">${sectionTitle}</h3>
+                                <div class="text-gray-700">${formattedValue}</div>
+                            </div>
+                        `;
+                    }
+                }
+
+                analysisHtml += `</div>`;
+            }
+
+            if (!analysisHtml) {
+                analysisHtml = '<p class="text-yellow-600">No detailed analysis available.</p>';
+            }
+
+            // Add score display if available
+            if (data.analysis.score) {
+                // Handle different score formats (could be number or string like "2/10")
+                let scoreValue;
+                let scoreText;
+
+                if (typeof data.analysis.score === 'number') {
+                    scoreValue = data.analysis.score;
+                    scoreText = `${scoreValue}/10`;
+                } else if (typeof data.analysis.score === 'string') {
+                    // Check if it's already in format X/10
+                    if (data.analysis.score.includes('/')) {
+                        scoreText = data.analysis.score;
+                        scoreValue = parseInt(data.analysis.score.split('/')[0]);
+                    } else {
+                        scoreValue = parseInt(data.analysis.score);
+                        scoreText = `${scoreValue}/10`;
+                    }
+                }
+
+                // Add score to the beginning of the analysis
+                analysisHtml = `
+                    <div class="mb-6 p-5 bg-gray-50 border border-gray-200 rounded-lg shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xl font-bold text-gray-800">Overall Score</h3>
+                            <div class="flex items-center">
+                                <div class="text-3xl font-bold ${scoreValue >= 8 ? 'text-green-600' : scoreValue >= 5 ? 'text-yellow-600' : 'text-red-600'}">${scoreValue}</div>
+                                <div class="text-xl font-bold text-gray-500 ml-1">/10</div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="relative w-full h-6 bg-gray-200 rounded-full overflow-hidden">
+                                <div class="absolute top-0 left-0 h-full ${scoreValue >= 8 ? 'bg-green-500' : scoreValue >= 5 ? 'bg-yellow-500' : 'bg-red-500'}" style="width: ${scoreValue * 10}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                ` + analysisHtml;
+            }
+
+            analysisContent.innerHTML = analysisHtml;
+
+            // Save response data
+            saveResponseData(transcript, data.analysis);
+
+            // Save score if available
+            if (data.analysis.score) {
+                const score = parseInt(data.analysis.score);
+                saveScore(score);
+            }
+
+        } catch (error) {
+            console.error('Error analyzing response:', error);
+            analysisContent.innerHTML = `<p class="text-red-600">Error analyzing response: ${error.message}</p><p class="mt-2">Please try again or proceed to the next question.</p>`;
+        }
+    }
+
+    // Save response data
+    function saveResponseData(transcript, analysis) {
+        // Save response to server via API
+        fetch('/api/save-interview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                responses: [{
+                    question: interviewQuestions[currentQuestionIndex],
+                    transcript: transcript,
+                    analysis: analysis
+                }]
+            }),
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to save response');
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response saved successfully');
+        })
+        .catch(error => {
+            console.error('Error saving response:', error);
+        });
+    }
+
+    // Initialize video
+    async function initializeVideo() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            videoElement.srcObject = stream;
+            videoPlaceholder.classList.add('hidden');
+            videoStatus.textContent = 'Video feed active';
+        } catch (error) {
+            console.error('Error accessing video:', error);
+            videoStatus.textContent = 'Could not access camera';
+            showNotification('Could not access camera. Please check your camera permissions.', 'error');
+        }
+    }
+
+    // Finish interview
+    function finishInterview() {
+        window.location.href = `/results?interview_id={{ interview.id }}`;
+    }
+
+    // Show notification
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg ${type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-indigo-500'} text-white max-w-md`;
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas ${type === 'error' ? 'fa-exclamation-circle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} mr-3"></i>
+                <p>${message}</p>
+            </div>
+        `;
+        document.body.appendChild(notification);
+
+        // Remove notification after 5 seconds
+        setTimeout(() => {
+            notification.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 500);
+        }, 5000);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load questions from server-side data
+        interviewQuestions = {{ questions|tojson }};
+        console.log('Questions loaded from server:', interviewQuestions);
+        enableVideo = {{ 'true' if session.get('enable_video') else 'false' }};
+
+        // Check if we have questions
+        if (!interviewQuestions || interviewQuestions.length === 0) {
+            console.error('No questions found in the template data');
+            showNotification('No interview questions found. Please set up the interview again.', 'error');
+            setTimeout(() => {
+                window.location.href = '{{ url_for("setup") }}';
+            }, 3000);
+            return;
+        }
+
+        // Initialize the interview with the questions
+        initializeInterview();
+
+        // Initialize video if enabled
+        if (enableVideo) {
+            initializeVideo();
+        } else {
+            videoContainer.classList.add('hidden');
+        }
+    });
+
+    // Add CSS for recording pulse animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .recording-pulse {
+            animation: pulse 1s infinite;
+            display: inline-block;
+        }
+    `;
+    document.head.appendChild(style);
+</script>
+{% endblock %}

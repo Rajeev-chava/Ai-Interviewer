@@ -1,0 +1,430 @@
+{% extends "base.html" %}
+
+{% block title %}Interview Results - AI Interviewer{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-800">Interview Results</h1>
+        <a href="{{ url_for('dashboard') }}" class="text-indigo-600 hover:text-indigo-800">
+            <i class="fas fa-arrow-left mr-1"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-6 p-4 rounded-lg {% if category == 'error' %}bg-red-100 text-red-700{% elif category == 'success' %}bg-green-100 text-green-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Interview Info -->
+    <div class="bg-indigo-50 rounded-lg p-4 mb-6">
+        <div class="flex flex-col md:flex-row justify-between">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800">{{ interview.job_title }}</h2>
+                <p class="text-gray-600">{{ interview.experience_level }} Level{% if interview.experience_years %} • {{ interview.experience_years }} Years Experience{% endif %}</p>
+            </div>
+            <div class="text-right">
+                <p class="text-gray-600">{{ interview.created_at.strftime('%d %b %Y, %H:%M') }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Performance Summary</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Overall Score -->
+            <div class="bg-indigo-50 rounded-lg p-4 text-center">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Overall Score</h3>
+                <div class="text-4xl font-bold text-indigo-600" id="overallScore">--</div>
+                <p class="text-sm text-gray-500 mt-1">Based on AI analysis</p>
+            </div>
+
+            <!-- Questions Answered -->
+            <div class="bg-green-50 rounded-lg p-4 text-center">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Questions Answered</h3>
+                <div class="text-4xl font-bold text-green-600" id="questionsAnswered">0/0</div>
+                <p class="text-sm text-gray-500 mt-1">Completed responses</p>
+            </div>
+        </div>
+
+        <!-- Strengths and Areas for Improvement -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Strengths -->
+            <div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Key Strengths</h3>
+                <ul id="strengthsList" class="space-y-2 text-gray-700">
+                    <li class="flex items-start">
+                        <i class="fas fa-check-circle text-green-500 mt-1 mr-2"></i>
+                        <span>Loading strengths...</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Areas for Improvement -->
+            <div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Areas for Improvement</h3>
+                <ul id="improvementsList" class="space-y-2 text-gray-700">
+                    <li class="flex items-start">
+                        <i class="fas fa-arrow-circle-up text-amber-500 mt-1 mr-2"></i>
+                        <span>Loading improvement areas...</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Responses -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Detailed Responses</h2>
+
+        <div id="responsesAccordion" class="space-y-4">
+            <!-- Responses will be inserted here by JavaScript -->
+            <div class="p-8 text-center text-gray-500">
+                <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500 border-solid mx-auto mb-4"></div>
+                <p>Loading your responses...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-col sm:flex-row justify-between space-y-4 sm:space-y-0 sm:space-x-4 mb-8">
+        <a href="/setup" class="gradient-bg text-white px-6 py-3 rounded-lg font-medium text-center shadow-md hover:shadow-lg transition transform hover:-translate-y-1">
+            Start New Interview
+        </a>
+        <button id="downloadReportBtn" class="bg-white text-indigo-600 border border-indigo-600 px-6 py-3 rounded-lg font-medium text-center hover:bg-indigo-50 transition">
+            <i class="fas fa-download mr-2"></i> Download Report
+        </button>
+    </div>
+
+    <!-- Tips for Improvement -->
+    <div class="bg-indigo-50 rounded-lg p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Tips for Your Next Interview</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="text-lg font-semibold text-indigo-700 mb-2">
+                    <i class="fas fa-lightbulb mr-2 text-yellow-500"></i> Preparation
+                </h3>
+                <p class="text-gray-700">
+                    Research the company thoroughly and prepare specific examples from your experience that demonstrate your skills and achievements.
+                </p>
+            </div>
+
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="text-lg font-semibold text-indigo-700 mb-2">
+                    <i class="fas fa-comment mr-2 text-blue-500"></i> Communication
+                </h3>
+                <p class="text-gray-700">
+                    Use the STAR method (Situation, Task, Action, Result) to structure your answers to behavioral questions.
+                </p>
+            </div>
+
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="text-lg font-semibold text-indigo-700 mb-2">
+                    <i class="fas fa-question-circle mr-2 text-purple-500"></i> Questions
+                </h3>
+                <p class="text-gray-700">
+                    Prepare thoughtful questions to ask the interviewer that demonstrate your interest in the role and company.
+                </p>
+            </div>
+
+            <div class="bg-white rounded-lg p-4 shadow-sm">
+                <h3 class="text-lg font-semibold text-indigo-700 mb-2">
+                    <i class="fas fa-user-tie mr-2 text-green-500"></i> Body Language
+                </h3>
+                <p class="text-gray-700">
+                    Maintain good posture, make eye contact, and use hand gestures naturally to emphasize points.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // DOM elements
+    const overallScore = document.getElementById('overallScore');
+    const questionsAnswered = document.getElementById('questionsAnswered');
+    const strengthsList = document.getElementById('strengthsList');
+    const improvementsList = document.getElementById('improvementsList');
+    const responsesAccordion = document.getElementById('responsesAccordion');
+    const downloadReportBtn = document.getElementById('downloadReportBtn');
+
+    // Global variables
+    let interviewQuestions = [];
+    let interviewResponses = [];
+
+    // Initialize the results page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Use the data passed from the server
+        interviewResponses = {{ responses|tojson }};
+        interviewQuestions = interviewResponses.map(response => response.question);
+
+        // Display results
+        displayResults();
+    });
+
+    function displayResults() {
+        // Count answered questions with transcripts
+        const answeredCount = interviewResponses.filter(response => response.transcript).length;
+        questionsAnswered.textContent = `${answeredCount}/${interviewResponses.length}`;
+
+        // Calculate overall score (example algorithm)
+        const score = calculateOverallScore();
+        overallScore.textContent = score;
+
+        // Save the overall score to the database
+        if (score !== '--') {
+            saveOverallScore(score);
+        }
+
+        // Generate strengths and improvements
+        generateStrengthsAndImprovements();
+
+        // Display detailed responses
+        displayDetailedResponses();
+    }
+
+    function calculateOverallScore() {
+        // This is a simplified scoring algorithm
+        // In a real app, you would have a more sophisticated scoring system
+
+        if (interviewResponses.length === 0) return '--';
+
+        let totalScore = 0;
+        let validResponses = 0;
+
+        interviewResponses.forEach(response => {
+            if (response && response.analysis) {
+                // Calculate a score based on the analysis
+                let responseScore = 0;
+
+                // Check for positive keywords in the analysis
+                const analysisText = JSON.stringify(response.analysis).toLowerCase();
+
+                if (analysisText.includes('excellent') || analysisText.includes('outstanding')) {
+                    responseScore = 90 + Math.random() * 10; // 90-100
+                } else if (analysisText.includes('good') || analysisText.includes('strong')) {
+                    responseScore = 75 + Math.random() * 15; // 75-90
+                } else if (analysisText.includes('adequate') || analysisText.includes('satisfactory')) {
+                    responseScore = 60 + Math.random() * 15; // 60-75
+                } else if (analysisText.includes('improve') || analysisText.includes('lacking')) {
+                    responseScore = 40 + Math.random() * 20; // 40-60
+                } else {
+                    responseScore = 50 + Math.random() * 30; // 50-80 (default)
+                }
+
+                totalScore += responseScore;
+                validResponses++;
+            }
+        });
+
+        if (validResponses === 0) return '--';
+
+        // Return the average score rounded to nearest integer
+        return Math.round(totalScore / validResponses);
+    }
+
+    function generateStrengthsAndImprovements() {
+        // Clear previous lists
+        strengthsList.innerHTML = '';
+        improvementsList.innerHTML = '';
+
+        // This is a simplified approach
+        // In a real app, you would analyze all responses to find patterns
+
+        // Example strengths
+        const strengths = [
+            'Clear and concise communication',
+            'Good use of specific examples',
+            'Structured responses using the STAR method',
+            'Demonstrated technical knowledge effectively'
+        ];
+
+        // Example improvements
+        const improvements = [
+            'Provide more quantifiable results in examples',
+            'Elaborate more on technical implementations',
+            'Focus more on personal contributions in team settings',
+            'Be more concise in responses to behavioral questions'
+        ];
+
+        // Add strengths to the list
+        strengths.slice(0, 3).forEach(strength => {
+            const li = document.createElement('li');
+            li.className = 'flex items-start';
+            li.innerHTML = `
+                <i class="fas fa-check-circle text-green-500 mt-1 mr-2"></i>
+                <span>${strength}</span>
+            `;
+            strengthsList.appendChild(li);
+        });
+
+        // Add improvements to the list
+        improvements.slice(0, 3).forEach(improvement => {
+            const li = document.createElement('li');
+            li.className = 'flex items-start';
+            li.innerHTML = `
+                <i class="fas fa-arrow-circle-up text-amber-500 mt-1 mr-2"></i>
+                <span>${improvement}</span>
+            `;
+            improvementsList.appendChild(li);
+        });
+    }
+
+    function displayDetailedResponses() {
+        // Clear previous content
+        responsesAccordion.innerHTML = '';
+
+        // Add each response to the accordion
+        interviewResponses.forEach((response, index) => {
+            const question = response.question;
+
+            const accordionItem = document.createElement('div');
+            accordionItem.className = 'border border-gray-200 rounded-lg overflow-hidden';
+
+            // Determine if we have a transcript for this question
+            const hasResponse = response && response.transcript;
+
+            // Create header
+            const header = document.createElement('button');
+            header.className = 'w-full flex justify-between items-center p-4 text-left bg-gray-50 hover:bg-gray-100 transition';
+            header.innerHTML = `
+                <div class="flex items-center">
+                    <span class="w-8 h-8 flex items-center justify-center rounded-full ${
+                        hasResponse ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'
+                    } mr-3 text-sm font-medium">
+                        ${index + 1}
+                    </span>
+                    <div>
+                        <span class="font-medium text-gray-800">${question.question}</span>
+                        <span class="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                            ${question.type.charAt(0).toUpperCase() + question.type.slice(1)}
+                        </span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down text-gray-500"></i>
+            `;
+
+            // Create content
+            const content = document.createElement('div');
+            content.className = 'p-4 border-t border-gray-200 hidden';
+
+            if (hasResponse) {
+                // Display transcript and analysis
+                content.innerHTML = `
+                    <div class="mb-4">
+                        <h4 class="text-md font-medium text-gray-700 mb-2">Your Response:</h4>
+                        <p class="text-gray-700 bg-gray-50 p-3 rounded-lg">${response.transcript}</p>
+                    </div>
+
+                    <div>
+                        <h4 class="text-md font-medium text-gray-700 mb-2">AI Analysis:</h4>
+                        <div class="space-y-3">
+                            ${formatAnalysis(response.analysis)}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // No response for this question
+                content.innerHTML = `
+                    <p class="text-gray-500 italic">No response recorded for this question.</p>
+                `;
+            }
+
+            // Add event listener to toggle content
+            header.addEventListener('click', () => {
+                // Toggle content visibility
+                content.classList.toggle('hidden');
+
+                // Toggle chevron icon
+                const icon = header.querySelector('i');
+                icon.classList.toggle('fa-chevron-down');
+                icon.classList.toggle('fa-chevron-up');
+            });
+
+            // Append header and content to accordion item
+            accordionItem.appendChild(header);
+            accordionItem.appendChild(content);
+
+            // Append accordion item to container
+            responsesAccordion.appendChild(accordionItem);
+        });
+    }
+
+    function formatAnalysis(analysis) {
+        if (!analysis) return '<p class="text-gray-500 italic">No analysis available.</p>';
+
+        if (typeof analysis === 'object') {
+            // If analysis is a structured object
+            let html = '';
+
+            for (const [key, value] of Object.entries(analysis)) {
+                if (key !== 'error') {
+                    const title = key.replace(/([A-Z])/g, ' $1')
+                                    .replace(/^./, str => str.toUpperCase())
+                                    .replace(/_/g, ' ');
+
+                    html += `
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <h5 class="font-medium text-gray-800">${title}:</h5>
+                            <p class="text-gray-700">${value}</p>
+                        </div>
+                    `;
+                }
+            }
+
+            return html;
+        } else {
+            // If analysis is plain text
+            return `<p class="text-gray-700 bg-gray-50 p-3 rounded-lg">${analysis}</p>`;
+        }
+    }
+
+    // Save overall score to the database
+    function saveOverallScore(score) {
+        // Get the interview ID from the URL or from the interview object
+        const interviewId = {{ interview.id }};
+
+        // Send the score to the server
+        fetch('/api/save-score', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                interview_id: interviewId,
+                overall_score: parseInt(score)
+            }),
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to save score');
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Score saved successfully');
+        })
+        .catch(error => {
+            console.error('Error saving score:', error);
+        });
+    }
+
+    // Handle download report button
+    downloadReportBtn.addEventListener('click', function() {
+        // In a real app, you would generate a PDF or other report format
+        // For this example, we'll just show a notification
+        showNotification('Report download feature will be available soon!', 'info');
+    });
+</script>
+{% endblock %}
