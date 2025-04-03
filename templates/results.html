@@ -39,19 +39,15 @@
     <div class="bg-white rounded-lg shadow-md p-6 mb-8">
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Performance Summary</h2>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="mb-6">
             <!-- Overall Score -->
-            <div class="bg-indigo-50 rounded-lg p-4 text-center">
+            <div class="bg-indigo-50 rounded-lg p-6 text-center max-w-md mx-auto">
                 <h3 class="text-lg font-semibold text-gray-700 mb-2">Overall Score</h3>
-                <div class="text-4xl font-bold text-indigo-600" id="overallScore">--</div>
-                <p class="text-sm text-gray-500 mt-1">Based on AI analysis</p>
-            </div>
-
-            <!-- Questions Answered -->
-            <div class="bg-green-50 rounded-lg p-4 text-center">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">Questions Answered</h3>
-                <div class="text-4xl font-bold text-green-600" id="questionsAnswered">0/0</div>
-                <p class="text-sm text-gray-500 mt-1">Completed responses</p>
+                <div class="text-5xl font-bold text-indigo-600" id="overallScore">--</div>
+                <p class="text-sm text-gray-500 mt-2">Based on AI analysis</p>
+                <div class="mt-4 w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                    <div class="bg-indigo-600 h-2.5 rounded-full" id="scoreProgressBar" style="width: 0%"></div>
+                </div>
             </div>
         </div>
 
@@ -153,7 +149,7 @@
 <script>
     // DOM elements
     const overallScore = document.getElementById('overallScore');
-    const questionsAnswered = document.getElementById('questionsAnswered');
+    const scoreProgressBar = document.getElementById('scoreProgressBar');
     const strengthsList = document.getElementById('strengthsList');
     const improvementsList = document.getElementById('improvementsList');
     const responsesAccordion = document.getElementById('responsesAccordion');
@@ -174,17 +170,36 @@
     });
 
     function displayResults() {
-        // Count answered questions with transcripts
+        // Count answered questions with transcripts (for internal use)
         const answeredCount = interviewResponses.filter(response => response.transcript).length;
-        questionsAnswered.textContent = `${answeredCount}/${interviewResponses.length}`;
 
-        // Calculate overall score (example algorithm)
+        // Calculate overall score
         const score = calculateOverallScore();
-        overallScore.textContent = score;
+        // Convert score to percentage (score out of 10 to percentage)
+        const percentage = score !== '--' ? Math.round((score / 10) * 100) : score;
+        overallScore.textContent = percentage !== '--' ? `${percentage}%` : percentage;
+
+        // Update progress bar
+        if (percentage !== '--') {
+            scoreProgressBar.style.width = `${percentage}%`;
+
+            // Set color based on score
+            if (percentage >= 80) {
+                scoreProgressBar.classList.remove('bg-yellow-500', 'bg-red-500', 'bg-indigo-600');
+                scoreProgressBar.classList.add('bg-green-500');
+            } else if (percentage >= 50) {
+                scoreProgressBar.classList.remove('bg-green-500', 'bg-red-500', 'bg-indigo-600');
+                scoreProgressBar.classList.add('bg-yellow-500');
+            } else {
+                scoreProgressBar.classList.remove('bg-green-500', 'bg-yellow-500', 'bg-indigo-600');
+                scoreProgressBar.classList.add('bg-red-500');
+            }
+        }
 
         // Save the overall score to the database
         if (score !== '--') {
-            saveOverallScore(score);
+            // Save the percentage score to the database
+            saveOverallScore(percentage);
         }
 
         // Generate strengths and improvements
@@ -195,8 +210,7 @@
     }
 
     function calculateOverallScore() {
-        // This is a simplified scoring algorithm
-        // In a real app, you would have a more sophisticated scoring system
+        // Calculate overall score based on the scores in each response
 
         if (interviewResponses.length === 0) return '--';
 
@@ -205,22 +219,42 @@
 
         interviewResponses.forEach(response => {
             if (response && response.analysis) {
-                // Calculate a score based on the analysis
-                let responseScore = 0;
+                let score;
+                const analysis = response.analysis;
 
-                // Check for positive keywords in the analysis
-                const analysisText = JSON.stringify(response.analysis).toLowerCase();
+                // Extract score from analysis
+                if (analysis.score) {
+                    if (typeof analysis.score === 'number') {
+                        score = analysis.score;
+                    } else if (typeof analysis.score === 'string' && analysis.score.includes('/')) {
+                        // Handle format like "2/10"
+                        score = parseInt(analysis.score.split('/')[0]);
+                    } else {
+                        score = parseInt(analysis.score);
+                    }
+
+                    if (!isNaN(score)) {
+                        console.log(`Found score ${score} for question: ${response.question.question}`);
+                        totalScore += score;
+                        validResponses++;
+                        return; // Skip the keyword-based scoring below
+                    }
+                }
+
+                // Fallback: Calculate a score based on keywords in the analysis
+                let responseScore = 0;
+                const analysisText = JSON.stringify(analysis).toLowerCase();
 
                 if (analysisText.includes('excellent') || analysisText.includes('outstanding')) {
-                    responseScore = 90 + Math.random() * 10; // 90-100
+                    responseScore = 9; // 9/10
                 } else if (analysisText.includes('good') || analysisText.includes('strong')) {
-                    responseScore = 75 + Math.random() * 15; // 75-90
+                    responseScore = 7; // 7/10
                 } else if (analysisText.includes('adequate') || analysisText.includes('satisfactory')) {
-                    responseScore = 60 + Math.random() * 15; // 60-75
+                    responseScore = 6; // 6/10
                 } else if (analysisText.includes('improve') || analysisText.includes('lacking')) {
-                    responseScore = 40 + Math.random() * 20; // 40-60
+                    responseScore = 4; // 4/10
                 } else {
-                    responseScore = 50 + Math.random() * 30; // 50-80 (default)
+                    responseScore = 5; // 5/10 (default)
                 }
 
                 totalScore += responseScore;
@@ -230,8 +264,12 @@
 
         if (validResponses === 0) return '--';
 
-        // Return the average score rounded to nearest integer
-        return Math.round(totalScore / validResponses);
+        // Calculate final score (0-10)
+        const score = Math.round(totalScore / validResponses);
+        console.log(`Final calculated score: ${score}/10 from ${validResponses} responses`);
+
+        // Return the score
+        return score;
     }
 
     function generateStrengthsAndImprovements() {
@@ -317,19 +355,21 @@
 
             // Create content
             const content = document.createElement('div');
-            content.className = 'p-4 border-t border-gray-200 hidden';
+            content.className = 'p-6 border-t border-gray-200 hidden';
 
             if (hasResponse) {
                 // Display transcript and analysis
                 content.innerHTML = `
-                    <div class="mb-4">
-                        <h4 class="text-md font-medium text-gray-700 mb-2">Your Response:</h4>
-                        <p class="text-gray-700 bg-gray-50 p-3 rounded-lg">${response.transcript}</p>
+                    <div class="mb-6">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-3">Your Response:</h4>
+                        <div class="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+                            <p class="text-gray-700">${response.transcript}</p>
+                        </div>
                     </div>
 
                     <div>
-                        <h4 class="text-md font-medium text-gray-700 mb-2">AI Analysis:</h4>
-                        <div class="space-y-3">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-3">AI Analysis:</h4>
+                        <div>
                             ${formatAnalysis(response.analysis)}
                         </div>
                     </div>
@@ -362,27 +402,103 @@
     }
 
     function formatAnalysis(analysis) {
+        console.log('Analysis data:', analysis);
+
         if (!analysis) return '<p class="text-gray-500 italic">No analysis available.</p>';
+
+        // If analysis is a string, try to parse it as JSON
+        if (typeof analysis === 'string') {
+            try {
+                analysis = JSON.parse(analysis);
+                console.log('Parsed analysis from string:', analysis);
+            } catch (e) {
+                console.error('Error parsing analysis string:', e);
+                return `<p class="text-gray-700 bg-gray-50 p-3 rounded-lg">${analysis}</p>`;
+            }
+        }
 
         if (typeof analysis === 'object') {
             // If analysis is a structured object
-            let html = '';
+            let html = '<div class="space-y-4">';
 
-            for (const [key, value] of Object.entries(analysis)) {
-                if (key !== 'error') {
-                    const title = key.replace(/([A-Z])/g, ' $1')
-                                    .replace(/^./, str => str.toUpperCase())
-                                    .replace(/_/g, ' ');
+            // Define the order and styling for each section
+            const sections = [
+                { key: 'contentRelevance', title: 'Content Relevance', color: 'blue' },
+                { key: 'clarityAndStructure', title: 'Clarity and Structure', color: 'green' },
+                { key: 'technicalAccuracy', title: 'Technical Accuracy', color: 'purple' },
+                { key: 'areasOfImprovement', title: 'Areas of Improvement', color: 'yellow' },
+                { key: 'score', title: 'Score', color: 'red' }
+            ];
+
+            // Process sections in order
+            for (const section of sections) {
+                if (analysis[section.key] && section.key !== 'error') {
+                    let value = analysis[section.key];
+                    console.log(`Processing section ${section.key} with value:`, value);
+
+                    // Special handling for score
+                    if (section.key === 'score') {
+                        // Check if score is in format like "2/10"
+                        if (typeof value === 'string' && value.includes('/')) {
+                            const scoreParts = value.split('/');
+                            if (scoreParts.length === 2) {
+                                const scoreValue = parseInt(scoreParts[0]);
+                                const maxScore = parseInt(scoreParts[1]);
+
+                                html += `
+                                    <div class="bg-white border border-${section.color}-200 rounded-lg shadow-sm overflow-hidden">
+                                        <div class="bg-${section.color}-50 px-4 py-2 border-b border-${section.color}-200">
+                                            <h5 class="font-semibold text-${section.color}-800">${section.title}</h5>
+                                        </div>
+                                        <div class="p-4">
+                                            <div class="flex items-center">
+                                                <div class="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden mr-3">
+                                                    <div class="absolute top-0 left-0 h-full bg-${section.color}-500" style="width: ${(scoreValue/maxScore)*100}%"></div>
+                                                </div>
+                                                <span class="text-lg font-bold text-${section.color}-600">${value}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                                continue;
+                            }
+                        }
+                    }
 
                     html += `
-                        <div class="bg-gray-50 p-3 rounded-lg">
-                            <h5 class="font-medium text-gray-800">${title}:</h5>
-                            <p class="text-gray-700">${value}</p>
+                        <div class="bg-white border border-${section.color}-200 rounded-lg shadow-sm overflow-hidden">
+                            <div class="bg-${section.color}-50 px-4 py-2 border-b border-${section.color}-200">
+                                <h5 class="font-semibold text-${section.color}-800">${section.title}</h5>
+                            </div>
+                            <div class="p-4">
+                                <p class="text-gray-700">${value}</p>
+                            </div>
                         </div>
                     `;
                 }
             }
 
+            // Process any remaining fields not in our predefined list
+            for (const [key, value] of Object.entries(analysis)) {
+                if (!sections.some(s => s.key === key) && key !== 'error') {
+                    const title = key.replace(/([A-Z])/g, ' $1')
+                                    .replace(/^./, str => str.toUpperCase())
+                                    .replace(/_/g, ' ');
+
+                    html += `
+                        <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                            <div class="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                                <h5 class="font-semibold text-gray-800">${title}</h5>
+                            </div>
+                            <div class="p-4">
+                                <p class="text-gray-700">${value}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            html += '</div>';
             return html;
         } else {
             // If analysis is plain text

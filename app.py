@@ -431,6 +431,43 @@ def analyze_response():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/get-responses', methods=['GET'])
+@login_required
+def get_responses():
+    """Get all responses for an interview"""
+    interview_id = request.args.get('interview_id')
+
+    if not interview_id:
+        return jsonify({"error": "Missing interview_id parameter"}), 400
+
+    try:
+        # Get all responses for this interview
+        responses = Response.query.filter_by(interview_id=interview_id).all()
+
+        # Convert to JSON
+        responses_data = []
+        for response in responses:
+            try:
+                analysis = json.loads(response.analysis) if response.analysis else {}
+            except json.JSONDecodeError:
+                analysis = {"text": response.analysis}
+
+            response_data = {
+                'id': response.id,
+                'question': {
+                    'text': response.question,
+                    'type': response.question_type
+                },
+                'transcript': response.transcript,
+                'analysis': analysis
+            }
+            responses_data.append(response_data)
+
+        return jsonify({"responses": responses_data})
+    except Exception as e:
+        print(f"Error getting responses: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/save-interview', methods=['POST'])
 @login_required
 def save_interview():
@@ -591,20 +628,25 @@ def analyze_interview_response(question, response):
 
         try:
             # Try to parse as JSON directly
+            # First, clean up any potential formatting issues
+            content = content.replace('\n', ' ').replace('\r', ' ')
+            # Handle the case where score is formatted as X/10 which is not valid JSON
+            content = content.replace('"score": 1/10', '"score": "1/10"')
+            content = content.replace('"score": 2/10', '"score": "2/10"')
+            content = content.replace('"score": 3/10', '"score": "3/10"')
+            content = content.replace('"score": 4/10', '"score": "4/10"')
+            content = content.replace('"score": 5/10', '"score": "5/10"')
+            content = content.replace('"score": 6/10', '"score": "6/10"')
+            content = content.replace('"score": 7/10', '"score": "7/10"')
+            content = content.replace('"score": 8/10', '"score": "8/10"')
+            content = content.replace('"score": 9/10', '"score": "9/10"')
+            content = content.replace('"score": 10/10', '"score": "10/10"')
+
             analysis = json.loads(content)
             print("Successfully parsed JSON response")
 
-            # Fix score format if needed
-            if 'score' in analysis and isinstance(analysis['score'], str):
-                # Check if score is in format like "2/10"
-                if '/' in analysis['score']:
-                    try:
-                        score_parts = analysis['score'].split('/')
-                        if len(score_parts) == 2:
-                            # Extract just the number part
-                            analysis['score'] = int(score_parts[0])
-                    except (ValueError, IndexError) as e:
-                        print(f"Error parsing score: {e}")
+            # Keep the score as a string in format X/10 for display purposes
+            # We don't need to convert it to an integer anymore
 
             return analysis
         except json.JSONDecodeError as json_error:
@@ -618,20 +660,24 @@ def analyze_interview_response(question, response):
 
                 if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
                     json_str = content[start_idx:end_idx]
+
+                    # Handle the case where score is formatted as X/10 which is not valid JSON
+                    json_str = json_str.replace('"score": 1/10', '"score": "1/10"')
+                    json_str = json_str.replace('"score": 2/10', '"score": "2/10"')
+                    json_str = json_str.replace('"score": 3/10', '"score": "3/10"')
+                    json_str = json_str.replace('"score": 4/10', '"score": "4/10"')
+                    json_str = json_str.replace('"score": 5/10', '"score": "5/10"')
+                    json_str = json_str.replace('"score": 6/10', '"score": "6/10"')
+                    json_str = json_str.replace('"score": 7/10', '"score": "7/10"')
+                    json_str = json_str.replace('"score": 8/10', '"score": "8/10"')
+                    json_str = json_str.replace('"score": 9/10', '"score": "9/10"')
+                    json_str = json_str.replace('"score": 10/10', '"score": "10/10"')
+
                     analysis = json.loads(json_str)
                     print("Successfully extracted and parsed JSON from text")
 
-                    # Fix score format if needed
-                    if 'score' in analysis and isinstance(analysis['score'], str):
-                        # Check if score is in format like "2/10"
-                        if '/' in analysis['score']:
-                            try:
-                                score_parts = analysis['score'].split('/')
-                                if len(score_parts) == 2:
-                                    # Extract just the number part
-                                    analysis['score'] = int(score_parts[0])
-                            except (ValueError, IndexError) as e:
-                                print(f"Error parsing score: {e}")
+                    # Keep the score as a string in format X/10 for display purposes
+                    # We don't need to convert it to an integer anymore
 
                     return analysis
             except Exception as extract_error:
@@ -654,7 +700,15 @@ def prep():
 @login_required
 def practice():
     """Render the practice interview page"""
-    return render_template('practice.html')
+    # Get practice questions from session
+    questions = session.get('practice_questions', [])
+
+    # If no questions in session, redirect to prep page
+    if not questions:
+        flash('No practice questions found. Please set up your practice first.', 'error')
+        return redirect(url_for('prep'))
+
+    return render_template('practice.html', questions=questions)
 
 @app.route('/api/generate-prep-questions', methods=['POST'])
 @login_required
@@ -736,6 +790,9 @@ def generate_prep_questions():
                 if current_question and 'question' in current_question:
                     questions.append(current_question)
 
+        # Store questions in session for reuse in practice page
+        session['practice_questions'] = questions
+
         return jsonify({"questions": questions})
     except Exception as e:
         print(f"Error generating practice questions: {str(e)}")
@@ -793,6 +850,12 @@ def check_answer():
         print(f"Error checking answer: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/learn-code')
+@login_required
+def learn_code():
+    """Render the learn code page"""
+    return render_template('learn_code.html')
+
 @app.route('/api/run-code', methods=['POST'])
 @login_required
 def run_code():
@@ -805,17 +868,116 @@ def run_code():
         # For security reasons, we'll just simulate code execution
         # In a real app, you would use a secure sandbox environment
 
-        # Simulate output based on language
+        # Simulate output based on language and code
         if language == 'python':
-            output = "Python code execution simulated. In a real environment, your code would run here."
+            output = f"Python code execution simulated:\n\n```python\n{code}\n```\n\nIn a real environment, your code would run here."
         elif language == 'javascript':
-            output = "JavaScript code execution simulated. In a real environment, your code would run here."
+            output = f"JavaScript code execution simulated:\n\n```javascript\n{code}\n```\n\nIn a real environment, your code would run here."
         else:
-            output = f"{language.capitalize()} code execution simulated. In a real environment, your code would run here."
+            output = f"{language.capitalize()} code execution simulated:\n\n```{language}\n{code}\n```\n\nIn a real environment, your code would run here."
 
         return jsonify({"output": output})
     except Exception as e:
         print(f"Error running code: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/explain-code', methods=['POST'])
+@login_required
+def explain_code():
+    """Explain code using OpenAI"""
+    data = request.json
+    code = data.get('code', '')
+    language = data.get('language', 'python')
+    explain_type = data.get('explain_type', 'detailed')
+
+    try:
+        # Build prompt based on explanation type
+        if explain_type == 'basic':
+            prompt = f"""Explain this {language} code in a simple way:
+
+```{language}
+{code}
+```
+
+Provide a brief overview and explain what the code does."""
+        elif explain_type == 'advanced':
+            prompt = f"""Provide an advanced explanation of this {language} code:
+
+```{language}
+{code}
+```
+
+Include:
+1. A detailed overview of what the code does
+2. Line-by-line explanation with technical details
+3. Analysis of time and space complexity
+4. Potential edge cases and bugs
+5. Suggestions for optimization
+6. Variable tracking showing how each variable changes throughout execution
+
+Format your response as a JSON object with these sections."""
+        else:  # detailed (default)
+            prompt = f"""Explain this {language} code in detail:
+
+```{language}
+{code}
+```
+
+Provide:
+1. An overview of what the code does
+2. Line-by-line explanation
+3. Variable tracking showing how each variable changes throughout execution
+
+Format your response as a JSON object with these fields:
+{{"overview": "...", "line_by_line": [{{
+    "code": "line of code",
+    "explanation": "explanation of this line"
+}}], "variable_tracking": [{{
+    "line_number": X,
+    "variables": {{
+        "variable_name": {{
+            "value": "current value",
+            "type": "data type"
+        }}
+    }}
+}}]}}"""
+
+        # Generate explanation using OpenAI
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an expert programming tutor. Explain code clearly and accurately, tracking variables and their values throughout execution."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+        )
+
+        # Parse the response
+        content = response.choices[0].message.content
+        try:
+            # Try to parse as JSON
+            explanation = json.loads(content)
+        except json.JSONDecodeError:
+            # If not valid JSON, extract JSON part from the text
+            start_idx = content.find('{')
+            end_idx = content.rfind('}') + 1
+            if start_idx != -1 and end_idx != -1:
+                json_str = content[start_idx:end_idx]
+                try:
+                    explanation = json.loads(json_str)
+                except json.JSONDecodeError:
+                    # If still not valid JSON, return as text
+                    explanation = {"overview": content}
+            else:
+                # If no JSON structure found, return as text
+                explanation = {"overview": content}
+
+        # Extract variable tracking if available
+        variable_tracking = explanation.get('variable_tracking', None)
+
+        return jsonify({"explanation": explanation, "variable_tracking": variable_tracking})
+    except Exception as e:
+        print(f"Error explaining code: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

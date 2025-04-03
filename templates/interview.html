@@ -504,11 +504,7 @@
             // Save response data
             saveResponseData(transcript, data.analysis);
 
-            // Save score if available
-            if (data.analysis.score) {
-                const score = parseInt(data.analysis.score);
-                saveScore(score);
-            }
+            // We don't need to save score separately as it's included in the analysis
 
         } catch (error) {
             console.error('Error analyzing response:', error);
@@ -562,7 +558,89 @@
 
     // Finish interview
     function finishInterview() {
-        window.location.href = `/results?interview_id={{ interview.id }}`;
+        // Calculate overall score based on all responses
+        calculateAndSaveOverallScore().then(() => {
+            // Redirect to results page
+            window.location.href = `/results?interview_id={{ interview.id }}`;
+        });
+    }
+
+    // Calculate and save overall score
+    async function calculateAndSaveOverallScore() {
+        try {
+            // Get all responses for this interview
+            const response = await fetch(`/api/get-responses?interview_id={{ interview.id }}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get responses');
+            }
+
+            const data = await response.json();
+            const responses = data.responses || [];
+
+            // Calculate average score
+            let totalScore = 0;
+            let validResponses = 0;
+
+            responses.forEach(response => {
+                if (response && response.analysis) {
+                    try {
+                        // Parse analysis if it's a string
+                        const analysis = typeof response.analysis === 'string'
+                            ? JSON.parse(response.analysis)
+                            : response.analysis;
+
+                        // Extract score
+                        if (analysis.score) {
+                            let score;
+                            if (typeof analysis.score === 'number') {
+                                score = analysis.score;
+                            } else if (typeof analysis.score === 'string' && analysis.score.includes('/')) {
+                                // Handle format like "2/10"
+                                score = parseInt(analysis.score.split('/')[0]);
+                            } else {
+                                score = parseInt(analysis.score);
+                            }
+
+                            if (!isNaN(score)) {
+                                totalScore += score;
+                                validResponses++;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error parsing analysis:', e);
+                    }
+                }
+            });
+
+            // Calculate average score (out of 10)
+            const rawScore = validResponses > 0 ? Math.round(totalScore / validResponses) : 0;
+            // Convert to percentage
+            const averageScore = Math.round((rawScore / 10) * 100);
+
+            // Save overall score to the database
+            await fetch('/api/save-score', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    interview_id: {{ interview.id }},
+                    overall_score: averageScore
+                }),
+            });
+
+            console.log('Overall score calculated and saved:', averageScore);
+            return averageScore;
+        } catch (error) {
+            console.error('Error calculating overall score:', error);
+            return 0;
+        }
     }
 
     // Show notification
