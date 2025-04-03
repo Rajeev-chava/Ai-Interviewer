@@ -1,10 +1,35 @@
-flask==2.3.3
-python-dotenv==1.0.0
+# Core dependencies
+flask==2.0.1
+python-dotenv==1.0.1
 openai==0.28.1
-gunicorn==21.2.0
-flask-sqlalchemy==3.1.1
+gunicorn==23.0.0
+flask-sqlalchemy==2.5.1
 flask-login==0.6.3
-flask-wtf==1.2.1
-werkzeug==2.3.7
-email-validator==2.1.0.post1
+flask-wtf==0.15.1
+werkzeug==2.0.1
+email-validator==2.1.1
 
+# Database and migrations
+alembic==1.15.1
+flask-migrate==4.1.0
+sqlalchemy==1.4.23
+
+# Authentication and security
+flask-bcrypt==1.0.1
+bcrypt==3.2.2
+
+# Web interface
+flask-cors==5.0.0
+flask-session==0.8.0
+wtforms==3.1.2
+
+# Audio processing
+pyaudio==0.2.14
+speechrecognition==3.10.0
+pydub==0.25.1
+
+# Utilities
+numpy==1.26.4
+pandas==2.2.3
+requests==2.32.3
+tqdm==4.67.1
