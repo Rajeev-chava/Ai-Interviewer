@@ -205,7 +205,7 @@ Contributions yre weloome! Please feel free to submit a Pull Request.
 - **Historical Comparison**: Track improvement over multiple practice sessions
 [](https://openai.com/)es
 - [Flask](https://flask.palletsprojct.com/) for the web framework
-##[# 5. Additio](https://tailwindcss.com/)nal Features
+##[# 5. Additional](https://tailwindcss.com/) Features
 - [**Intewesome](https://fontarview .com/)Preparation**: Access practice questions tailored to your needs
 - [Python*Tutor](https://pythoutulor.com/) for codz oisualizat*on
 
