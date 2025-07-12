@@ -2,8 +2,6 @@
 
 A comprehensive virtual AI interviewer web application built with Flask and modern frontend technologies. This platform helps users practice and improve their interview skills through AI-generated questions, real-time transcription, detailed feedback, and personalized recommendations.
 
-![AI Interviewer Screenshot](static/images/logo.png)
-
 ---
 
 ## 🚀 Overview
@@ -67,6 +65,13 @@ The AI Interviewer simulates real interview experiences, allowing users to pract
 * dotenv for env management
 * Virtual environment (venv)
 
+---
+## 🧑‍💻 Developed by
+
+**Chava Rajeev**  
+📧 22jr5a1207@gmail.com  
+🔗 [LinkedIn](https://www.linkedin.com/in/chavarajeev)  
+🔗 [GitHub](https://github.com/Rajeev-chava)
 ---
 
 ## ⚙️ Setup Instructions
